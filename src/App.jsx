@@ -386,7 +386,7 @@ export default function App() {
       </div>
     );
   }
-  if (!lessons || !active) {
+  if (!lessons || !active || todayLesson === null) {
     return (
       <div className="fl-root"><style>{CSS}</style>
         <main className="fl-main"><div className="fl-loading">Opening today's page…</div></main>
