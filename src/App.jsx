@@ -153,6 +153,7 @@ export default function App() {
   const [demoState, setDemoState] = useState(null);
   const [syncState, setSyncState] = useState("idle"); // idle | syncing | synced | error | off
   const [showSettings, setShowSettings] = useState(false);
+  const [currentId, setCurrentId] = useState(null); // which lesson is displayed right now
   const deepRef = useRef(null);
   const syncTimer = useRef(null);
 
@@ -233,10 +234,25 @@ export default function App() {
     return null;
   }, [lessons, active, today]);
 
-  const todayLesson = lessons && active
-    ? resurfaced || lessons[Math.min(active.reading_position, lessons.length - 1)]
+  /* which lesson to display: stays FIXED while you complete it.
+     Priority on load: lesson already shown today (latest) > resurfaced missed topic > next unread */
+  useEffect(() => {
+    if (!lessons || !active || currentId !== null) return;
+    let shownToday = null;
+    for (const l of lessons) {
+      const t = active.topics[l.id];
+      if (t?.shown_dates?.includes(today)) shownToday = l; // keep last (highest index) shown today
+    }
+    const pick = shownToday || resurfaced || lessons[Math.min(active.reading_position, lessons.length - 1)];
+    setCurrentId(pick.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lessons, active, currentId]);
+
+  const todayLesson = lessons && active && currentId !== null
+    ? lessons.find((l) => l.id === currentId) || lessons[Math.min(active.reading_position, lessons.length - 1)]
     : null;
-  const allDone = lessons && active && !resurfaced && active.reading_position >= lessons.length;
+  const allDone = lessons && active && !resurfaced && active.reading_position >= lessons.length
+    && !Object.values(active.topics).some((t) => t.status === "missed");
   const todayState = todayLesson ? active.topics[todayLesson.id] : null;
   const isCompletedToday = todayState?.status === "completed";
 
@@ -299,9 +315,18 @@ export default function App() {
   }
 
   function exploreMore() {
+    // Jump the VIEW to the next topic; marks nothing on the current one
+    const idx = lessons.findIndex((l) => l.id === currentId);
+    if (idx < active.reading_position) {
+      // viewing a resurfaced/older topic -> jump to the next unread
+      setCurrentId(lessons[Math.min(active.reading_position, lessons.length - 1)].id);
+      return;
+    }
+    const nextIdx = Math.min(idx + 1, lessons.length - 1);
+    setCurrentId(lessons[nextIdx].id);
     applyProgress((p) => ({
       ...p,
-      reading_position: Math.min(p.reading_position + 1, lessons.length),
+      reading_position: Math.min(Math.max(p.reading_position, nextIdx + 1), lessons.length),
     }));
   }
 
@@ -314,8 +339,8 @@ export default function App() {
     }
   }
 
-  function enterDemo() { setDemoState(demoProgress(lessons)); setDemo(true); setTab("today"); }
-  function exitDemo() { setDemo(false); setDemoState(null); }
+  function enterDemo() { setDemoState(demoProgress(lessons)); setDemo(true); setCurrentId(null); setTab("today"); }
+  function exitDemo() { setDemo(false); setDemoState(null); setCurrentId(null); }
 
   async function connectGist(e) {
     e.preventDefault();
@@ -561,7 +586,7 @@ const CSS = `
 .fl-root {
   --paper:#F7F5F0; --card:#FFFFFF; --ink:#3A3F4A; --ink-soft:#8A8F9C;
   --sage:#C9D8C5; --mist:#D7E1EA; --blush:#EFD9D1;
-  --sage-strong:#5E8C4A; --mist-strong:#4A7FB5; --blush-strong:#C4633A;
+  --sage-strong:#4C9A3F; --mist-strong:#3B7FD4; --blush-strong:#F2C230;
   --shadow:0 1px 3px rgba(58,63,74,0.06);
   min-height:100vh; background:var(--paper); color:var(--ink);
   font-family:'Inter',system-ui,sans-serif; font-size:16.5px; line-height:1.7;
@@ -608,7 +633,7 @@ const CSS = `
 .fl-btn:disabled{opacity:0.75; cursor:default;}
 .fl-btn-sage{background:var(--sage-strong); color:#FFFFFF;}
 .fl-btn-mist{background:var(--mist-strong); color:#FFFFFF;}
-.fl-btn-blush{background:var(--blush-strong); color:#FFFFFF;}
+.fl-btn-blush{background:var(--blush-strong); color:#3A3F4A;}
 
 .fl-deep{display:grid; grid-template-rows:0fr; transition:grid-template-rows 200ms ease; scroll-margin-top:16px;}
 .fl-deep.open{grid-template-rows:1fr;}
