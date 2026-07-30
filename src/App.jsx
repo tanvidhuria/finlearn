@@ -42,6 +42,22 @@ function fmtDateTime(iso) {
   return `${String(d.getDate()).padStart(2, "0")} ${mon}, ${h}:${String(d.getMinutes()).padStart(2, "0")} ${am}`;
 }
 
+function dateToStr(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+/* last N calendar days ending today, for the week strip */
+function lastNDates(n) {
+  const out = [];
+  const now = new Date();
+  for (let i = n - 1; i >= 0; i--) {
+    const x = new Date(now);
+    x.setDate(now.getDate() - i);
+    out.push(x);
+  }
+  return out;
+}
+
 /* ---------- progress model ---------- */
 function freshProgress() {
   return {
@@ -132,7 +148,7 @@ async function gistWrite(pat, gistId, progress) {
   const res = await fetch(gistId ? `https://api.github.com/gists/${gistId}` : "https://api.github.com/gists", {
     method: gistId ? "PATCH" : "POST",
     headers: { Authorization: `Bearer ${pat}`, Accept: "application/vnd.github+json", "Content-Type": "application/json" },
-    body: gistId ? body : JSON.stringify({ description: "Paisa Patra progress", public: false, files: { [GIST_FILENAME]: { content: JSON.stringify(progress, null, 2) } } }),
+    body: gistId ? body : JSON.stringify({ description: "DailyFin progress", public: false, files: { [GIST_FILENAME]: { content: JSON.stringify(progress, null, 2) } } }),
   });
   if (!res.ok) throw new Error(`Gist write failed (${res.status})`);
   const data = await res.json();
@@ -220,6 +236,31 @@ export default function App() {
     () => Object.values(active?.topics || {}).filter((t) => t.status === "completed").length,
     [active]
   );
+
+  /* week strip: status per day — ✓ any completion, ✕ active day without one */
+  const weekStrip = useMemo(() => {
+    if (!active) return [];
+    const completedDates = new Set();
+    let firstActivity = null;
+    for (const t of Object.values(active.topics)) {
+      if (t.completed_at) {
+        const ds = dateToStr(new Date(t.completed_at));
+        completedDates.add(ds);
+        if (!firstActivity || ds < firstActivity) firstActivity = ds;
+      }
+      for (const ds of t.shown_dates || []) {
+        if (!firstActivity || ds < firstActivity) firstActivity = ds;
+      }
+    }
+    return lastNDates(7).map((d) => {
+      const ds = dateToStr(d);
+      let status = "none";
+      if (completedDates.has(ds)) status = "done";
+      else if (ds === today) status = "pending";
+      else if (firstActivity && ds >= firstActivity) status = "missed";
+      return { ds, num: String(d.getDate()).padStart(2, "0"), isToday: ds === today, status };
+    });
+  }, [active, today]);
 
   /* today's lesson: resurfaced missed topic (>=3 days old) queues ahead of new topics */
   const resurfaced = useMemo(() => {
@@ -314,22 +355,6 @@ export default function App() {
     });
   }
 
-  function exploreMore() {
-    // Jump the VIEW to the next topic; marks nothing on the current one
-    const idx = lessons.findIndex((l) => l.id === currentId);
-    if (idx < active.reading_position) {
-      // viewing a resurfaced/older topic -> jump to the next unread
-      setCurrentId(lessons[Math.min(active.reading_position, lessons.length - 1)].id);
-      return;
-    }
-    const nextIdx = Math.min(idx + 1, lessons.length - 1);
-    setCurrentId(lessons[nextIdx].id);
-    applyProgress((p) => ({
-      ...p,
-      reading_position: Math.min(Math.max(p.reading_position, nextIdx + 1), lessons.length),
-    }));
-  }
-
   function openDeepDive() {
     const opening = !deepOpen;
     setDeepOpen(opening);
@@ -400,7 +425,7 @@ export default function App() {
 
       <header className="fl-topbar">
         <div className="fl-topbar-inner">
-          <span className="fl-wordmark">Paisa Patra</span>
+          <span className="fl-wordmark">DailyFin</span>
           <nav className="fl-topnav">
             <button className={tab === "today" ? "on" : ""} onClick={() => setTab("today")}>Today</button>
             <button className={tab === "history" ? "on" : ""} onClick={() => setTab("history")}>History</button>
@@ -434,9 +459,19 @@ export default function App() {
 
         {tab === "today" && (
           <section>
-            <div className="fl-date-hero" aria-label={`${dayNum} ${monStr}`}>
-              <span className="fl-date-day">{dayNum}</span>
-              <span className="fl-date-mon">{monStr}</span>
+            {/* Month + week strip (diary-sketch design) */}
+            <div className="fl-strip-wrap" aria-label="This week's progress">
+              <div className="fl-month">{now.toLocaleString("en-IN", { month: "long" })}</div>
+              <div className="fl-daystrip">
+                {weekStrip.map((d) => (
+                  <div key={d.ds} className={`fl-day ${d.status}${d.isToday ? " is-today" : ""}`} title={d.ds}>
+                    <span className="fl-day-circle">
+                      {d.status === "done" ? "✓" : d.status === "missed" ? "✕" : ""}
+                    </span>
+                    <span className="fl-day-num">{d.num}</span>
+                  </div>
+                ))}
+              </div>
             </div>
 
             {allDone ? (
@@ -462,7 +497,6 @@ export default function App() {
                 )}
 
                 <div className="fl-actions">
-                  <button className="fl-btn fl-btn-mist" onClick={exploreMore}>Explore More</button>
                   <button className="fl-btn fl-btn-blush" onClick={openDeepDive} aria-expanded={deepOpen}>
                     {deepOpen ? "Close Deep Dive" : "Deep Dive"}
                   </button>
@@ -586,7 +620,7 @@ const CSS = `
 .fl-root {
   --paper:#F7F5F0; --card:#FFFFFF; --ink:#3A3F4A; --ink-soft:#8A8F9C;
   --sage:#C9D8C5; --mist:#D7E1EA; --blush:#EFD9D1;
-  --sage-strong:#4C9A3F; --mist-strong:#3B7FD4; --blush-strong:#F2C230;
+  --sage-strong:#BFDCB4; --mist-strong:#BCD4EC; --blush-strong:#F6E3A1;
   --shadow:0 1px 3px rgba(58,63,74,0.06);
   min-height:100vh; background:var(--paper); color:var(--ink);
   font-family:'Inter',system-ui,sans-serif; font-size:16.5px; line-height:1.7;
@@ -596,14 +630,14 @@ const CSS = `
 .fl-root button{font:inherit; cursor:pointer; border:none; background:none; color:inherit;}
 .fl-root button:focus-visible, .fl-root a:focus-visible, .fl-root input:focus-visible{outline:2px solid var(--ink); outline-offset:2px; border-radius:4px;}
 
-.fl-topbar{background:var(--paper); border-bottom:1px solid rgba(58,63,74,0.08);}
+.fl-topbar{background:var(--paper); border-bottom:1px solid rgba(58,63,74,0.08); position:sticky; top:0; z-index:30;}
 .fl-topbar-inner{max-width:640px; margin:0 auto; padding:14px 20px; display:flex; align-items:center; gap:14px;}
 .fl-wordmark{font-family:'Fraunces',serif; font-weight:600; font-size:19px; letter-spacing:0.2px;}
 .fl-topnav{display:flex; gap:6px; margin-left:auto;}
 .fl-topnav button{padding:6px 12px; border-radius:999px; color:var(--ink-soft); font-weight:500; font-size:14.5px;}
 .fl-topnav button.on{background:var(--card); color:var(--ink); box-shadow:var(--shadow);}
-.fl-streak-pill{background:var(--sage-strong); color:#FFFFFF; border-radius:999px; padding:5px 13px; font-size:13.5px; font-weight:600; display:inline-flex; align-items:center; gap:6px; box-shadow:0 1px 3px rgba(58,63,74,0.15); white-space:nowrap;}
-.fl-flame{color:#FFE9B0;}
+.fl-streak-pill{background:var(--sage-strong); color:#3A3F4A; border-radius:999px; padding:5px 13px; font-size:13.5px; font-weight:600; display:inline-flex; align-items:center; gap:6px; box-shadow:0 1px 3px rgba(58,63,74,0.15); white-space:nowrap;}
+.fl-flame{color:#E0A93E;}
 .fl-gear{font-size:17px; color:var(--ink-soft); padding:4px;}
 .fl-gear:hover{color:var(--ink);}
 
@@ -613,9 +647,15 @@ const CSS = `
 .fl-main{flex:1; width:100%; max-width:640px; margin:0 auto; padding:28px 20px 96px;}
 .fl-loading{text-align:center; color:var(--ink-soft); margin-top:80px; font-family:'Fraunces',serif; font-size:19px;}
 
-.fl-date-hero{display:flex; flex-direction:column; align-items:center; margin:6px 0 22px; line-height:1;}
-.fl-date-day{font-family:'Fraunces',serif; font-weight:500; font-size:46px; letter-spacing:-1px;}
-.fl-date-mon{font-family:'Fraunces',serif; font-weight:400; font-size:17px; letter-spacing:5px; color:var(--ink-soft); margin-top:6px;}
+.fl-strip-wrap{display:flex; flex-direction:column; align-items:center; margin:6px 0 22px;}
+.fl-month{font-family:'Fraunces',serif; font-weight:500; font-size:24px; letter-spacing:0.5px; margin-bottom:14px;}
+.fl-daystrip{display:flex; gap:10px;}
+.fl-day{display:flex; flex-direction:column; align-items:center; gap:5px;}
+.fl-day-circle{width:36px; height:36px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:15px; border:1.5px solid rgba(58,63,74,0.18); background:var(--card); color:var(--ink);}
+.fl-day.done .fl-day-circle{background:#BFDCB4; border-color:#A9CBA0; color:#2F5324;}
+.fl-day.missed .fl-day-circle{background:#F3D3C8; border-color:#E5BBAC; color:#8A4B33;}
+.fl-day.is-today .fl-day-circle{border:2px solid var(--ink);}
+.fl-day-num{font-size:12px; color:var(--ink-soft); font-weight:600;}
 
 .fl-card{background:var(--card); border-radius:14px; box-shadow:var(--shadow); padding:30px 28px 26px;}
 .fl-eyebrow{font-size:12.5px; letter-spacing:1.4px; text-transform:uppercase; color:var(--ink-soft); font-weight:600; margin-bottom:12px; display:flex; align-items:center; gap:10px; flex-wrap:wrap;}
@@ -628,11 +668,11 @@ const CSS = `
 
 .fl-actions{display:flex; justify-content:space-between; align-items:center; gap:14px; margin-top:24px; flex-wrap:wrap;}
 .fl-actions .fl-btn{flex:1 1 0; min-width:150px; text-align:center; white-space:nowrap;}
-.fl-btn{border-radius:999px; padding:12px 16px; font-weight:600; font-size:14.5px; color:var(--ink); transition:transform 120ms ease, box-shadow 120ms ease; box-shadow:0 2px 6px rgba(58,63,74,0.18);}
+.fl-btn{border-radius:999px; padding:12px 16px; font-weight:600; font-size:14.5px; color:var(--ink); transition:transform 120ms ease, box-shadow 120ms ease; box-shadow:0 2px 5px rgba(58,63,74,0.12); border:1px solid rgba(58,63,74,0.10);}
 .fl-btn:hover:not(:disabled){transform:translateY(-1px); filter:brightness(0.96);}
 .fl-btn:disabled{opacity:0.75; cursor:default;}
-.fl-btn-sage{background:var(--sage-strong); color:#FFFFFF;}
-.fl-btn-mist{background:var(--mist-strong); color:#FFFFFF;}
+.fl-btn-sage{background:var(--sage-strong); color:#3A3F4A;}
+.fl-btn-mist{background:var(--mist-strong); color:#3A3F4A;}
 .fl-btn-blush{background:var(--blush-strong); color:#3A3F4A;}
 
 .fl-deep{display:grid; grid-template-rows:0fr; transition:grid-template-rows 200ms ease; scroll-margin-top:16px;}
@@ -680,13 +720,15 @@ const CSS = `
 .fl-bottombar{display:none;}
 @media (max-width:700px){
   .fl-topnav{display:none;}
+  .fl-streak-pill{margin-left:auto;}
   .fl-bottombar{display:flex; position:fixed; bottom:0; left:0; right:0; background:var(--card); border-top:1px solid rgba(58,63,74,0.08); box-shadow:0 -1px 3px rgba(58,63,74,0.05); z-index:40;}
   .fl-bottombar button{flex:1; padding:12px 0 16px; display:flex; flex-direction:column; align-items:center; gap:3px; font-size:12.5px; font-weight:600; color:var(--ink-soft);}
   .fl-bottombar button.on{color:var(--ink);}
   .fl-bb-dot{width:6px; height:6px; border-radius:50%; background:currentColor; opacity:0.35;}
   .fl-bottombar button.on .fl-bb-dot{background:var(--sage-strong); opacity:1; box-shadow:0 0 0 3px rgba(94,140,74,0.25);}
   .fl-card{padding:24px 20px 22px;}
-  .fl-date-day{font-size:40px;}
+  .fl-daystrip{gap:7px;}
+  .fl-day-circle{width:32px; height:32px; font-size:14px;}
 }
 @media (prefers-reduced-motion: reduce){
   .fl-deep{transition:none;}
