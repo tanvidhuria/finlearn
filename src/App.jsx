@@ -7,9 +7,9 @@ import React, { useState, useMemo, useEffect, useRef, useCallback } from "react"
    - Design: "Morning Ledger" (approved)
    ============================================================ */
 
-const STORAGE_KEY = "paisa-patra-progress-v1";
-const SETTINGS_KEY = "paisa-patra-settings-v1";
-const GIST_FILENAME = "paisa-patra-progress.json";
+const STORAGE_KEY = "dailyfin-progress-v2";
+const SETTINGS_KEY = "dailyfin-settings-v1";
+const GIST_FILENAME = "dailyfin-progress.json";
 const RESURFACE_AFTER_DAYS = 3;
 
 const BADGES = [
@@ -364,6 +364,13 @@ export default function App() {
     }
   }
 
+  function resetAll() {
+    if (window.confirm("Erase all progress (streak, completions, badges) and start fresh?")) {
+      try { localStorage.removeItem(STORAGE_KEY); } catch (e) { /* ignore */ }
+      window.location.reload();
+    }
+  }
+
   function enterDemo() { setDemoState(demoProgress(lessons)); setDemo(true); setCurrentId(null); setTab("today"); }
   function exitDemo() { setDemo(false); setDemoState(null); setCurrentId(null); }
 
@@ -440,9 +447,6 @@ export default function App() {
         </div>
       </header>
 
-      {!demo && syncState === "off" && (
-        <div className="fl-banner">Progress is saved on this device only. <button className="fl-linkish" onClick={() => setShowSettings(true)}>Set up sync</button> to keep it across devices.</div>
-      )}
       {!demo && syncState === "error" && (
         <div className="fl-banner fl-banner-warn">Sync failed — progress is safe on this device. <button className="fl-linkish" onClick={() => setShowSettings(true)}>Check settings</button></div>
       )}
@@ -482,7 +486,7 @@ export default function App() {
             ) : (
               <article className="fl-card">
                 <div className="fl-eyebrow">
-                  Day {todayLesson.day} · Phase {todayLesson.phase} — {todayLesson.phaseName}
+                  Phase {todayLesson.phase} — {todayLesson.phaseName}
                   {resurfaced && <span className="fl-resurfaced-tag">Resurfaced</span>}
                 </div>
                 <h1 className="fl-title">{todayLesson.title}</h1>
@@ -525,11 +529,6 @@ export default function App() {
               </article>
             )}
 
-            <div className="fl-demo-line">
-              {!demo
-                ? <><button className="fl-linkish" onClick={enterDemo}>View demo</button><span> · pre-filled sample history</span></>
-                : <>Demo mode — your real progress is untouched · <button className="fl-linkish" onClick={exitDemo}>Exit</button></>}
-            </div>
           </section>
         )}
 
@@ -602,6 +601,9 @@ export default function App() {
                 </div>
               </form>
             )}
+            <div style={{ marginTop: 18, textAlign: "center" }}>
+              <button className="fl-linkish" onClick={resetAll}>Reset all progress</button>
+            </div>
           </div>
         </div>
       )}
@@ -644,11 +646,11 @@ const CSS = `
 .fl-banner{max-width:640px; margin:12px auto 0; padding:10px 20px; font-size:13.5px; color:var(--ink-soft); text-align:center;}
 .fl-banner-warn{color:#9A5B3C;}
 
-.fl-main{flex:1; width:100%; max-width:640px; margin:0 auto; padding:28px 20px 96px;}
+.fl-main{flex:1; width:100%; max-width:640px; margin:0 auto; padding:14px 20px 96px;}
 .fl-loading{text-align:center; color:var(--ink-soft); margin-top:80px; font-family:'Fraunces',serif; font-size:19px;}
 
-.fl-strip-wrap{display:flex; flex-direction:column; align-items:center; margin:6px 0 22px;}
-.fl-month{font-family:'Fraunces',serif; font-weight:500; font-size:24px; letter-spacing:0.5px; margin-bottom:14px;}
+.fl-strip-wrap{display:flex; flex-direction:column; align-items:center; margin:2px 0 18px;}
+.fl-month{font-family:'Fraunces',serif; font-weight:500; font-size:16px; letter-spacing:5px; text-transform:uppercase; color:var(--ink-soft); margin-bottom:12px;}
 .fl-daystrip{display:flex; gap:10px;}
 .fl-day{display:flex; flex-direction:column; align-items:center; gap:5px;}
 .fl-day-circle{width:36px; height:36px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:15px; border:1.5px solid rgba(58,63,74,0.18); background:var(--card); color:var(--ink);}
