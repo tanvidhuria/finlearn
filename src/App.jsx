@@ -448,7 +448,7 @@ export default function App() {
       </header>
 
       {!demo && syncState === "error" && (
-        <div className="fl-banner fl-banner-warn">Sync failed — progress is safe on this device. <button className="fl-linkish" onClick={() => setShowSettings(true)}>Check settings</button></div>
+        <div className="fl-banner fl-banner-warn">Backup isn't working right now — your progress is still safe on this device. <button className="fl-linkish" onClick={() => setShowSettings(true)}>Fix backup</button></div>
       )}
 
       <main className="fl-main">
@@ -575,31 +575,49 @@ export default function App() {
       {showSettings && (
         <div className="fl-modal-backdrop" onClick={() => setShowSettings(false)}>
           <div className="fl-modal" onClick={(e) => e.stopPropagation()}>
-            <h3 className="fl-deep-label">Sync across devices</h3>
-            <p className="fl-body-p fl-small">
-              Progress syncs to a private GitHub Gist in your account. Create a fine-grained
-              personal access token with only the <strong>gist</strong> scope — nothing else.
-              The token stays in this browser.
-            </p>
+            <h3 className="fl-deep-label">Back up your progress</h3>
             {settings.pat ? (
               <>
-                <p className="fl-body-p fl-small">Connected to gist <code>{settings.gistId}</code>.</p>
+                <p className="fl-body-p fl-small">
+                  Backup is ON. Your streak and completed days are saved to your GitHub account
+                  automatically.
+                </p>
+                <p className="fl-body-p fl-small">
+                  Using another phone or laptop too? Open DailyFin there, tap the gear, and enter the
+                  same key along with this sync code: <code>{settings.gistId}</code>
+                </p>
                 <div className="fl-actions" style={{ marginTop: 12 }}>
-                  <button className="fl-btn fl-btn-blush" onClick={disconnectGist}>Disconnect</button>
+                  <button className="fl-btn fl-btn-blush" onClick={disconnectGist}>Turn off backup</button>
                   <button className="fl-btn fl-btn-mist" onClick={() => setShowSettings(false)}>Close</button>
                 </div>
               </>
             ) : (
-              <form onSubmit={connectGist}>
-                <label className="fl-label">GitHub token (gist scope)</label>
-                <input className="fl-input" name="pat" type="password" placeholder="github_pat_…" required />
-                <label className="fl-label">Existing gist ID (leave empty to create one)</label>
-                <input className="fl-input" name="gistId" type="text" placeholder="optional" />
-                <div className="fl-actions" style={{ marginTop: 16 }}>
-                  <button className="fl-btn fl-btn-mist" type="button" onClick={() => setShowSettings(false)}>Cancel</button>
-                  <button className="fl-btn fl-btn-sage" type="submit">Connect</button>
-                </div>
-              </form>
+              <>
+                <p className="fl-body-p fl-small">
+                  Right now, your progress lives only in this browser. Clearing the browser or
+                  changing phones would erase it. Back it up for free in 3 steps:
+                </p>
+                <ol className="fl-small fl-steps">
+                  <li>
+                    <a className="fl-linkish" href="https://github.com/settings/tokens/new?scopes=gist&description=DailyFin%20backup" target="_blank" rel="noopener noreferrer">
+                      Tap here to open GitHub
+                    </a>{" "}
+                    (sign in, or create a free account)
+                  </li>
+                  <li>Scroll down and press the green <strong>Generate token</strong> button. Everything is already set correctly.</li>
+                  <li>Copy the long code GitHub shows you, paste it below, and press Save.</li>
+                </ol>
+                <form onSubmit={connectGist}>
+                  <label className="fl-label">Your backup key</label>
+                  <input className="fl-input" name="pat" type="password" placeholder="Paste the code from GitHub here" required />
+                  <label className="fl-label">Sync code (only if you already set this up on another device)</label>
+                  <input className="fl-input" name="gistId" type="text" placeholder="Leave empty the first time" />
+                  <div className="fl-actions" style={{ marginTop: 16 }}>
+                    <button className="fl-btn fl-btn-mist" type="button" onClick={() => setShowSettings(false)}>Cancel</button>
+                    <button className="fl-btn fl-btn-sage" type="submit">Save</button>
+                  </div>
+                </form>
+              </>
             )}
             <div style={{ marginTop: 18, textAlign: "center" }}>
               <button className="fl-linkish" onClick={resetAll}>Reset all progress</button>
@@ -718,6 +736,8 @@ const CSS = `
 .fl-label{display:block; font-size:13px; font-weight:600; color:var(--ink-soft); margin:12px 0 5px;}
 .fl-input{width:100%; border:1px solid rgba(58,63,74,0.2); border-radius:10px; padding:10px 12px; font:inherit; font-size:14.5px; background:var(--paper);}
 .fl-modal code{background:var(--paper); padding:1px 6px; border-radius:6px; font-size:13px;}
+.fl-steps{margin:0 0 6px 18px; padding:0; color:var(--ink-soft);}
+.fl-steps li{margin-bottom:8px; line-height:1.55;}
 
 .fl-bottombar{display:none;}
 @media (max-width:700px){
